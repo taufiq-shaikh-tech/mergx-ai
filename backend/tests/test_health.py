@@ -28,15 +28,35 @@ def test_v1_health_endpoint(client):
 
 def test_cors_headers(client):
     """
-    Test CORS headers are present for local frontend development server.
+    Test CORS headers are present for local frontend and Vercel deployments.
     """
-    headers = {
+    # 1. Local Vite dev server
+    headers_local = {
         "Origin": "http://localhost:5173",
         "Access-Control-Request-Method": "GET",
     }
-    response = client.options("/api/health", headers=headers)
-    assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    res_local = client.options("/api/health", headers=headers_local)
+    assert res_local.status_code == 200
+    assert res_local.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    # 2. Vercel Production deployment
+    headers_vercel = {
+        "Origin": "https://mergx-ai.vercel.app",
+        "Access-Control-Request-Method": "GET",
+    }
+    res_vercel = client.options("/api/health", headers=headers_vercel)
+    assert res_vercel.status_code == 200
+    assert res_vercel.headers.get("access-control-allow-origin") == "https://mergx-ai.vercel.app"
+
+    # 3. Vercel Preview/Branch deployment
+    headers_preview = {
+        "Origin": "https://mergx-ai-preview-abc.vercel.app",
+        "Access-Control-Request-Method": "GET",
+    }
+    res_preview = client.options("/api/health", headers=headers_preview)
+    assert res_preview.status_code == 200
+    assert res_preview.headers.get("access-control-allow-origin") == "https://mergx-ai-preview-abc.vercel.app"
+
 
 
 def test_centralized_error_format_404(client):

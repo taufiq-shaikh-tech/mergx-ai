@@ -11,7 +11,21 @@ import type {
   ScanRecord,
 } from "../types";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://mergx-ai.onrender.com/").replace(/\/$/, "");
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || "https://mergx-ai.onrender.com";
+
+export function buildApiUrl(endpoint: string): string {
+  const base = (RAW_API_BASE || "https://mergx-ai.onrender.com").trim().replace(/\/+$/, "");
+  let path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  // Prevent duplicate /api/v1 prefixes if base already has /api/v1
+  if (base.endsWith("/api/v1") && path.startsWith("/api/v1/")) {
+    path = path.slice(7);
+  } else if (base.endsWith("/api") && path.startsWith("/api/")) {
+    path = path.slice(4);
+  }
+
+  return `${base}${path}`;
+}
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
@@ -27,7 +41,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
     if (import.meta.env.DEV) {
       headers["Authorization"] = "Bearer dev-token";
     } else {
-      console.warn("Could not retrieve Supabase session token:", err);
+      console.warn("[Auth] Could not retrieve Supabase session token:", err);
     }
   }
   return headers;
@@ -35,7 +49,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const authHeaders = await getAuthHeaders();
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
+  const method = options.method || "GET";
 
   const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = {
@@ -47,33 +62,69 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers["Content-Type"] = "application/json";
   }
 
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       ...options,
       headers,
     });
+  } catch (netError: any) {
+    const isNetworkOrCors =
+      netError?.name === "TypeError" ||
+      netError?.message?.includes("Failed to fetch") ||
+      netError?.message?.includes("NetworkError");
 
-    const json = await response.json().catch(() => null);
+    console.error(`[API Network Error] ${method} ${url} failed:`, {
+      endpoint,
+      errorName: netError?.name,
+      errorMessage: netError?.message,
+      targetUrl: url,
+      hint: "Check CORS configuration on Render backend or ensure backend service is awake.",
+    });
 
-    if (!response.ok) {
-      const errorMsg =
-        json?.error?.message ||
-        json?.detail ||
-        `Request failed with status ${response.status}: ${response.statusText}`;
-      throw new Error(errorMsg);
+    if (isNetworkOrCors) {
+      throw new Error(
+        `Cannot connect to backend server at ${url}. Ensure the backend is running, awake, and CORS allows this origin.`
+      );
     }
-
-    if (json && typeof json === "object" && "data" in json) {
-      return json.data as T;
-    }
-
-    return json as T;
-  } catch (error: any) {
-    if (error.message.includes("Failed to fetch") || error.name === "TypeError") {
-      throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Ensure the backend is running.`);
-    }
-    throw error;
+    throw netError;
   }
+
+  // Parse response
+  let json: any = null;
+  try {
+    json = await response.json();
+  } catch {
+    json = null;
+  }
+
+  if (!response.ok) {
+    const serverMessage =
+      json?.error?.message ||
+      json?.detail ||
+      `Request failed with status ${response.status}: ${response.statusText}`;
+
+    console.error(`[API Error ${response.status}] ${method} ${url}:`, {
+      status: response.status,
+      statusText: response.statusText,
+      serverMessage,
+      payload: json,
+    });
+
+    if (response.status === 401) {
+      throw new Error(
+        serverMessage || "You are not authenticated. Please log in to access your projects and analysis."
+      );
+    }
+
+    throw new Error(serverMessage);
+  }
+
+  if (json && typeof json === "object" && "data" in json) {
+    return json.data as T;
+  }
+
+  return json as T;
 }
 
 export const api = {
