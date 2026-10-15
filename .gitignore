@@ -1,0 +1,32 @@
+# Root gitignore for MergeX AI
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+*.pyc
+*.db
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.oxlint_cache/
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
