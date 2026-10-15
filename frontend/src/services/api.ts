@@ -11,7 +11,7 @@ import type {
   ScanRecord,
 } from "../types";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://mergx-ai.onrender.com/").replace(/\/$/, "");
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
